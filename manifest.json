@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Vocab Booster",
+  "version": "0.1",
+  "description": "Highlight and learn vocabulary words on the web.",
+  "permissions": ["storage", "activeTab"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
