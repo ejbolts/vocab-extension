@@ -1,7 +1,7 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "ADD_WORD") {
-        fetchSynonymsAndCache(message.word);
-        return true; // Keep the channel open if needed
+        fetchDataAndCache(message.word);
+        return true;
     } else if (message.type === "PAGE_WORDS") {
         buildReplacementMap(message.payload).then((map) => {
             sendResponse({ replacementMap: map });
@@ -10,20 +10,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
-// Fetch synonyms from Datamuse and cache them
-async function fetchSynonymsAndCache(word) {
+// Fetch synonyms (Datamuse) and definition (Dictionary API), then cache
+async function fetchDataAndCache(word) {
     try {
-        const response = await fetch(`https://api.datamuse.com/words?rel_syn=${word}`);
-        const synonyms = await response.json();
+        const [synResponse, defResponse] = await Promise.all([
+            fetch(`https://api.datamuse.com/words?rel_syn=${word}`),
+            fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`)
+        ]);
 
-        await chrome.storage.local.set({ [word]: { synonyms } });
-        console.log(`Cached synonyms for ${word} with synonyms:`, synonyms);
+        const synonyms = await synResponse.json();
+        const definitions = await defResponse.json();
+
+        const definition = definitions[0]?.meanings[0]?.definitions[0]?.definition || "No definition found";
+
+
+        await chrome.storage.local.set({ [word]: { synonyms, definition } });
+        console.log(`Cached data for ${word}`);
     } catch (error) {
-        console.error(`Error fetching synonyms for ${word}:`, error);
+        console.error(`Error fetching data for ${word}:`, error);
     }
 }
 
-// Build replacement map from cached data
+// Build replacement map from cached data (now includes definition)
 async function buildReplacementMap(pageWords) {
     const replacementMap = {};
     const { vocabWords = [] } = await chrome.storage.sync.get("vocabWords");
@@ -36,7 +44,10 @@ async function buildReplacementMap(pageWords) {
         if (cachedData && cachedData.synonyms) {
             cachedData.synonyms.forEach((syn) => {
                 if (pageWordSet.has(syn.word)) {
-                    replacementMap[syn.word] = vocabWord;
+                    replacementMap[syn.word] = {
+                        vocabWord,
+                        definition: cachedData.definition || "No definition available"
+                    };
                 }
             });
         }

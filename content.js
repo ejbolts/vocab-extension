@@ -1,3 +1,33 @@
+// Create a single tooltip element (shared for all hovers)
+const tooltip = document.createElement("div");
+tooltip.style.position = "absolute";
+tooltip.style.backgroundColor = "#333";
+tooltip.style.color = "#fff";
+tooltip.style.padding = "8px";
+tooltip.style.borderRadius = "4px";
+tooltip.style.zIndex = "9999";
+tooltip.style.pointerEvents = "none"; // So it doesn't block clicks
+tooltip.style.display = "none";
+tooltip.style.maxWidth = "300px";
+tooltip.style.fontSize = "14px";
+document.body.appendChild(tooltip);
+
+// Function to show tooltip
+function showTooltip(event, original, definition) {
+    tooltip.innerHTML = `
+    <strong>Original:</strong> ${original}<br>
+    <strong>Definition:</strong> ${definition}
+  `;
+    tooltip.style.display = "block";
+    tooltip.style.left = `${event.pageX + 10}px`;
+    tooltip.style.top = `${event.pageY + 10}px`;
+}
+
+// Function to hide tooltip
+function hideTooltip() {
+    tooltip.style.display = "none";
+}
+
 const STOP_WORDS = new Set([
     "a", "about", "an", "and", "are", "as", "at", "be", "by", "for", "from",
     "how", "i", "in", "is", "it", "of", "on", "or", "that", "the", "this",
@@ -26,7 +56,6 @@ function replaceVocab(replacementMap) {
             const fragment = document.createDocumentFragment();
             let lastIndex = 0;
 
-            // Use replace as an iterator, but build DOM nodes manually
             originalText.replace(regex, (fullMatch, captured, offset) => {
                 hasReplacements = true;
 
@@ -37,28 +66,34 @@ function replaceVocab(replacementMap) {
 
                 // Create the replacement span
                 const lowerMatch = captured.toLowerCase();
-                const replacementWord = replacementMap[lowerMatch];
+                const { vocabWord, definition } = replacementMap[lowerMatch];
                 const span = document.createElement("span");
+                span.className = "vocab-replace"; // For potential styling
                 span.style.backgroundColor = "yellow";
-                span.textContent = replacementWord;
-                span.title = `Original: ${fullMatch}`; // Preserve original casing in title
+                span.textContent = vocabWord;
+                span.dataset.original = fullMatch; // Store for hover
+                span.dataset.definition = definition;
+
+                // Add hover listeners
+                span.addEventListener("mouseenter", (event) => {
+                    showTooltip(event, span.dataset.original, span.dataset.definition);
+                });
+                span.addEventListener("mouseleave", hideTooltip);
+
                 fragment.appendChild(span);
 
-                // Update lastIndex to after the match
                 lastIndex = offset + fullMatch.length;
             });
 
-            // Add any remaining text after the last match
+            // Add remaining text
             fragment.appendChild(
                 document.createTextNode(originalText.slice(lastIndex))
             );
 
-            // Only replace if we actually made changes (avoids unnecessary DOM mutations)
             if (hasReplacements) {
                 node.parentNode.replaceChild(fragment, node);
             }
         } else if (node.nodeType === 1 && node.nodeName !== "SCRIPT" && node.nodeName !== "STYLE") {
-            // Recurse through children (use Array.from to avoid mutating live collections)
             Array.from(node.childNodes).forEach(walk);
         }
     }
