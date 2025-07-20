@@ -2,11 +2,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const wordInput = document.getElementById("wordInput");
     const addButton = document.getElementById("addButton");
     const vocabList = document.getElementById("vocabList");
+    const modeSelect = document.getElementById("modeSelect");
 
-    // Load and display the current vocab list
-    function loadVocab() {
-        chrome.storage.sync.get("vocabWords", (data) => {
+    // Load and display the current vocab list and settings
+    function loadData() {
+        chrome.storage.sync.get(["vocabWords", "vocabMode"], (data) => {
             const words = data.vocabWords || [];
+            const mode = data.vocabMode || "replace"; // Default to replace
+
             vocabList.innerHTML = "";
             words.forEach((word) => {
                 const li = document.createElement("li");
@@ -15,13 +18,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 const deleteBtn = document.createElement("button");
                 deleteBtn.textContent = "Delete";
                 deleteBtn.style.marginLeft = "10px";
-                deleteBtn.addEventListener("click", () => {
-                    removeWord(word);
-                });
+                deleteBtn.addEventListener("click", () => removeWord(word));
 
                 li.appendChild(deleteBtn);
                 vocabList.appendChild(li);
             });
+
+            modeSelect.value = mode;
         });
     }
 
@@ -34,9 +37,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!words.includes(newWord)) {
                     words.push(newWord);
                     chrome.storage.sync.set({ vocabWords: words }, () => {
+                        // Notify background to fetch data
                         chrome.runtime.sendMessage({ type: "ADD_WORD", word: newWord });
                         wordInput.value = "";
-                        loadVocab();
+                        loadData();
                     });
                 }
             });
@@ -49,11 +53,20 @@ document.addEventListener("DOMContentLoaded", () => {
             let words = data.vocabWords || [];
             words = words.filter((w) => w !== wordToRemove);
             chrome.storage.sync.set({ vocabWords: words }, () => {
+                // Also remove from cache
                 chrome.storage.local.remove(wordToRemove);
-                loadVocab();
+                loadData();
             });
         });
     }
 
-    loadVocab(); // Initial load
+    // Save mode setting on change
+    modeSelect.addEventListener("change", (event) => {
+        const newMode = event.target.value;
+        chrome.storage.sync.set({ vocabMode: newMode }, () => {
+            console.log(`Mode set to: ${newMode}`);
+        });
+    });
+
+    loadData(); // Initial load
 });

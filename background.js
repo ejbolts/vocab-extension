@@ -3,8 +3,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         fetchDataAndCache(message.word);
         return true;
     } else if (message.type === "PAGE_WORDS") {
-        buildReplacementMap(message.payload).then((map) => {
-            sendResponse({ replacementMap: map });
+        buildReplacementMap(message.payload).then((result) => {
+            sendResponse({ replacementMap: result.map, mode: result.mode });
         });
         return true; // Async response
     }
@@ -35,6 +35,7 @@ async function fetchDataAndCache(word) {
 async function buildReplacementMap(pageWords) {
     const replacementMap = {};
     const { vocabWords = [] } = await chrome.storage.sync.get("vocabWords");
+    const { vocabMode = "replace" } = await chrome.storage.sync.get("vocabMode");
     const cache = await chrome.storage.local.get(vocabWords);
 
     const pageWordSet = new Set(pageWords);
@@ -53,5 +54,5 @@ async function buildReplacementMap(pageWords) {
         }
     });
 
-    return replacementMap;
+    return { map: replacementMap, mode: vocabMode };
 }

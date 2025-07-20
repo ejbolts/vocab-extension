@@ -13,11 +13,27 @@ tooltip.style.fontSize = "14px";
 document.body.appendChild(tooltip);
 
 // Function to show tooltip
-function showTooltip(event, original, definition) {
-    tooltip.innerHTML = `
-    <strong>Original:</strong> ${original}<br>
-    <strong>Definition:</strong> ${definition}
-  `;
+function showTooltip(event, span) {
+    let content = '';
+
+    if (span.dataset.replacedWith) {
+        // Replace mode: Show original and definition
+        content = `
+      <strong>Original word:</strong> ${span.dataset.original}<br>
+      <strong>Definition (${span.dataset.original}):</strong> ${span.dataset.definition}
+    `;
+    } else if (span.dataset.vocabMatch) {
+        // Highlight mode: Show vocab match and definition
+        content = `
+      <strong>Vocab Match:</strong> ${span.dataset.vocabMatch}<br>
+      <strong>Definition:</strong> ${span.dataset.definition}
+    `;
+    } else {
+        // Fallback (shouldn't happen)
+        content = 'No data available';
+    }
+
+    tooltip.innerHTML = content;
     tooltip.style.display = "block";
     tooltip.style.left = `${event.pageX + 10}px`;
     tooltip.style.top = `${event.pageY + 10}px`;
@@ -43,8 +59,8 @@ function getPageWords() {
     return [...new Set(filtered)]; // Unique words
 }
 
-// Function to replace words based on map
-function replaceVocab(replacementMap) {
+// Function to replace/highlight words based on map and mode (optional rootNode for mutations)
+function replaceVocab(replacementMap, mode, rootNode = document.body) {
     if (Object.keys(replacementMap).length === 0) return;
 
     const regex = new RegExp(`\\b(${Object.keys(replacementMap).join("|")})\\b`, "gi");
@@ -59,7 +75,6 @@ function replaceVocab(replacementMap) {
             originalText.replace(regex, (fullMatch, captured, offset) => {
                 hasReplacements = true;
 
-                // Add text before the match
                 fragment.appendChild(
                     document.createTextNode(originalText.slice(lastIndex, offset))
                 );
@@ -68,15 +83,22 @@ function replaceVocab(replacementMap) {
                 const lowerMatch = captured.toLowerCase();
                 const { vocabWord, definition } = replacementMap[lowerMatch];
                 const span = document.createElement("span");
-                span.className = "vocab-replace"; // For potential styling
+                span.className = "vocab-replace";
                 span.style.backgroundColor = "yellow";
-                span.textContent = vocabWord;
-                span.dataset.original = fullMatch; // Store for hover
-                span.dataset.definition = definition;
+                span.dataset.original = fullMatch;
+                span.dataset.definition = definition || "No definition available";
 
-                // Add hover listeners
+                if (mode === "replace") {
+                    span.textContent = vocabWord;
+                    span.dataset.replacedWith = vocabWord; // Flag for replace mode
+                } else {
+                    span.textContent = fullMatch; // Highlight mode: keep original
+                    span.dataset.vocabMatch = vocabWord; // Flag for highlight mode
+                }
+
+                // Hover listeners (pass the span to showTooltip)
                 span.addEventListener("mouseenter", (event) => {
-                    showTooltip(event, span.dataset.original, span.dataset.definition);
+                    showTooltip(event, span);  // Updated to pass span
                 });
                 span.addEventListener("mouseleave", hideTooltip);
 
@@ -85,7 +107,6 @@ function replaceVocab(replacementMap) {
                 lastIndex = offset + fullMatch.length;
             });
 
-            // Add remaining text
             fragment.appendChild(
                 document.createTextNode(originalText.slice(lastIndex))
             );
@@ -98,14 +119,42 @@ function replaceVocab(replacementMap) {
         }
     }
 
-    walk(document.body);
+    walk(rootNode);
 }
 
-// On page load: Get words, send to background, get map, replace
+// On page load: Get words, send to background, get map and mode, then process
 (async () => {
     const pageWords = getPageWords();
     const response = await chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords });
     if (response && response.replacementMap) {
-        replaceVocab(response.replacementMap);
+        processPage(response.replacementMap, response.mode || "replace");
     }
 })();
+
+// Main processing function (called on load and mutations)
+function processPage(replacementMap, mode) {
+    replaceVocab(replacementMap, mode); // Run the DOM walk
+
+    // Clean up any previous observer
+    if (window.vocabObserver) {
+        window.vocabObserver.disconnect();
+    }
+
+    // Set up MutationObserver for dynamic content
+    window.vocabObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === "childList" && mutation.addedNodes.length) {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === 1) {
+                        replaceVocab(replacementMap, mode, node); // Process only the new subtree
+                    }
+                });
+            }
+        });
+    });
+
+    window.vocabObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+}
