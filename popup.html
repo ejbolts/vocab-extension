@@ -28,22 +28,47 @@
         margin: 0;
       }
       li {
+        display: flex;
+        align-items: center; /* Align icon and text vertically */
         margin: 5px 0;
         cursor: pointer; /* Indicate clickable */
       }
-      li:hover {
+      .vocab-word:hover {
         background-color: #f0f0f0; /* Hover effect */
       }
-      .synonyms {
-        display: none; /* Hidden by default */
-        padding: 5px;
-        background-color: #f9f9f9;
-        border-top: 1px solid #ddd;
-        font-size: 0.9em;
+      li.selected {
+        background-color: #e0f7fa; /* Highlight selected word */
       }
-      .synonyms ul {
+      .delete-icon {
+        cursor: pointer;
+        margin-right: 5px;
+        color: #888; /* Gray for subtlety */
+      }
+      .delete-icon:hover {
+        color: #f00; /* Red on hover for feedback */
+      }
+      #synonymsSection {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        display: none; /* Hidden by default */
+      }
+      #synonymsSection h4 {
+        margin: 0 0 5px;
+      }
+      #synonymsSection ul {
         margin: 0;
         padding-left: 15px;
+      }
+
+      #closeSynonyms {
+        float: right;
+        cursor: pointer;
+        color: #888;
+      }
+      #closeSynonyms:hover {
+        color: #f00;
       }
     </style>
   </head>
@@ -56,6 +81,14 @@
     <input type="text" id="searchInput" placeholder="Search words..." />
     <div id="vocabListContainer">
       <ul id="vocabList"></ul>
+    </div>
+
+    <div id="synonymsSection">
+      <span id="closeSynonyms">X</span>
+      <h4 id="selectedWord"></h4>
+      <p><strong>Definition:</strong> <span id="wordDefinition"></span></p>
+      <p><strong>Synonyms:</strong></p>
+      <ul id="synonymsList"></ul>
     </div>
 
     <h3>Settings</h3>

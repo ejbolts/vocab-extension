@@ -7,8 +7,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const exportButton = document.getElementById("exportButton");
     const importButton = document.getElementById("importButton");
     const importFile = document.getElementById("importFile");
+    const synonymsSection = document.getElementById("synonymsSection");
+    const selectedWordElem = document.getElementById("selectedWord");
+    const wordDefinition = document.getElementById("wordDefinition");
+    const synonymsList = document.getElementById("synonymsList");
+    const closeSynonyms = document.getElementById("closeSynonyms");
 
     let allWords = []; // Cache of all vocab words for filtering
+    let selectedLi = null; // Track the currently selected list item
 
     // Load and display data
     function loadData(filter = "") {
@@ -20,33 +26,40 @@ document.addEventListener("DOMContentLoaded", () => {
                 const stats = localData.vocabStats || { totalEncounters: 0, pagesProcessed: 0 };
 
                 // Filter words based on search
-                const filteredWords = allWords.filter((word) =>
+                let filteredWords = allWords.filter((word) =>
                     word.toLowerCase().includes(filter.toLowerCase())
                 );
+
+                // Sort alphabetically (case-insensitive)
+                filteredWords.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
                 vocabList.innerHTML = "";
                 filteredWords.forEach((word) => {
                     const li = document.createElement("li");
-                    li.textContent = word;
+                    li.className = "vocab-word";
 
-                    // Delete button
-                    const deleteBtn = document.createElement("button");
-                    deleteBtn.textContent = "Delete";
-                    deleteBtn.style.marginLeft = "10px";
-                    deleteBtn.addEventListener("click", () => removeWord(word));
+                    // Delete icon (before the word)
+                    const deleteIcon = document.createElement("span");
+                    deleteIcon.className = "delete-icon";
+                    deleteIcon.textContent = "X";
+                    deleteIcon.addEventListener("click", (event) => {
+                        event.stopPropagation(); // Prevent triggering li click
+                        removeWord(word);
+                    });
+                    li.appendChild(deleteIcon);
 
-                    li.appendChild(deleteBtn);
+                    // Word text
+                    const wordSpan = document.createElement("span");
+                    wordSpan.textContent = word;
+                    wordSpan.style.flex = "1"; // Take up remaining space
+                    li.appendChild(wordSpan);
 
-                    // Expandable synonyms section
-                    const synonymsDiv = document.createElement("div");
-                    synonymsDiv.className = "synonyms";
-                    synonymsDiv.innerHTML = `<p>Loading synonyms...</p>`;
-                    li.appendChild(synonymsDiv);
-
-                    // Click to toggle synonyms
-                    li.addEventListener("click", (event) => {
-                        if (event.target !== deleteBtn) { // Avoid triggering on delete click
-                            toggleSynonyms(word, synonymsDiv);
+                    // Click to show synonyms in shared section
+                    li.addEventListener("click", () => {
+                        if (selectedLi === li) {
+                            hideSynonyms(); // Hide if clicking the same word
+                        } else {
+                            showSynonyms(word, li);
                         }
                     });
 
@@ -70,24 +83,54 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Toggle synonyms display
-    function toggleSynonyms(word, synonymsDiv) {
-        if (synonymsDiv.style.display === "block") {
-            synonymsDiv.style.display = "none";
-            return;
+    // Show synonyms in the shared section
+    function showSynonyms(word, li) {
+        // Highlight the selected li
+        if (selectedLi) {
+            selectedLi.classList.remove("selected");
         }
+        selectedLi = li;
+        selectedLi.classList.add("selected");
 
         chrome.storage.local.get(word, (data) => {
             const cachedData = data[word];
-            if (cachedData && cachedData.synonyms && cachedData.synonyms.length > 0) {
-                const synonymList = cachedData.synonyms.map((syn) => `<li>${syn.word}</li>`).join("");
-                synonymsDiv.innerHTML = `<ul>${synonymList}</ul>`;
+            selectedWordElem.textContent = word;
+
+            if (cachedData) {
+                wordDefinition.textContent = cachedData.definition || "No definition available.";
+                synonymsList.innerHTML = "";
+                if (cachedData.synonyms && cachedData.synonyms.length > 0) {
+                    cachedData.synonyms.forEach((syn) => {
+                        const synLi = document.createElement("li");
+                        synLi.textContent = syn.word;
+                        synLi.style.cursor = "default";
+                        synLi.style.userSelect = "text";
+                        synonymsList.appendChild(synLi);
+                    });
+                } else {
+                    synonymsList.innerHTML = "<li>No synonyms found.</li>";
+                }
             } else {
-                synonymsDiv.innerHTML = `<p>No synonyms found. Try re-adding the word to refresh cache.</p>`;
+                wordDefinition.textContent = "No data found. Try re-adding the word to refresh cache.";
+                synonymsList.innerHTML = "";
             }
-            synonymsDiv.style.display = "block";
+
+            synonymsSection.style.display = "block";
         });
     }
+
+    // Hide synonyms section
+    function hideSynonyms() {
+        if (selectedLi) {
+            selectedLi.classList.remove("selected");
+            selectedLi = null;
+        }
+        synonymsSection.style.display = "none";
+        synonymsList.innerHTML = "";
+    }
+
+    // Close button
+    closeSynonyms.addEventListener("click", hideSynonyms);
 
     // Add a new word and notify background
     addButton.addEventListener("click", () => {
@@ -114,6 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
             words = words.filter((w) => w !== wordToRemove);
             chrome.storage.sync.set({ vocabWords: words }, () => {
                 chrome.storage.local.remove(wordToRemove);
+                hideSynonyms(); // Hide if the deleted word was selected
                 loadData(searchInput.value); // Refresh with current filter
             });
         });
@@ -133,7 +177,6 @@ document.addEventListener("DOMContentLoaded", () => {
             alert("Blacklist updated!");
         });
     });
-
 
 
     // Export vocab and cache as JSON
