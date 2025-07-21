@@ -82,5 +82,88 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
 
+
+    const exportButton = document.getElementById("exportButton");
+    const importButton = document.getElementById("importButton");
+    const importFile = document.getElementById("importFile");
+
+    // Export vocab and cache as JSON
+    exportButton.addEventListener("click", async () => {
+        const syncData = await chrome.storage.sync.get(["vocabWords", "vocabMode", "blacklistDomains"]);
+        const vocabWords = syncData.vocabWords || [];
+        const localData = await chrome.storage.local.get(vocabWords);
+
+        // Combine into one object
+        const exportData = {
+            vocabWords: vocabWords,
+            cache: localData,
+            settings: {
+                vocabMode: syncData.vocabMode || "replace",
+                blacklistDomains: syncData.blacklistDomains || []
+            }
+        };
+
+        // Create downloadable JSON
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "vocab-booster-export.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        console.log("Vocab exported!");
+    });
+
+    // Trigger file input for import
+    importButton.addEventListener("click", () => {
+        importFile.click();
+    });
+
+    // Handle file import
+    importFile.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+
+                    // Merge vocabWords (avoid duplicates)
+                    const currentSync = await chrome.storage.sync.get(["vocabWords", "vocabMode", "blacklistDomains"]);
+                    const mergedWords = [...new Set([...(currentSync.vocabWords || []), ...(importedData.vocabWords || [])])];
+
+                    // Merge settings (overwrite with imported if present)
+                    const mergedMode = importedData.settings?.vocabMode || currentSync.vocabMode || "replace";
+                    const mergedBlacklist = importedData.settings?.blacklistDomains || currentSync.blacklistDomains || [];
+
+                    // Set sync data
+                    await chrome.storage.sync.set({
+                        vocabWords: mergedWords,
+                        vocabMode: mergedMode,
+                        blacklistDomains: mergedBlacklist
+                    });
+
+                    // Merge cache (overwrite or add)
+                    const importedCache = importedData.cache || {};
+                    await chrome.storage.local.set(importedCache);
+
+                    // For any new words without cache, fetch data
+                    const newWordsWithoutCache = mergedWords.filter((word) => !importedCache[word]);
+                    for (const word of newWordsWithoutCache) {
+                        chrome.runtime.sendMessage({ type: "ADD_WORD", word });
+                    }
+
+                    loadData(); // Refresh UI
+                    alert("Vocab imported successfully!");
+                } catch (error) {
+                    console.error("Import error:", error);
+                    alert("Error importing file. Please check the format.");
+                }
+            };
+            reader.readAsText(file);
+        }
+    });
+
+
     loadData(); // Initial load
 });
