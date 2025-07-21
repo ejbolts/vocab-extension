@@ -4,11 +4,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const vocabList = document.getElementById("vocabList");
     const modeSelect = document.getElementById("modeSelect");
 
+
     // Load and display the current vocab list and settings
     function loadData() {
-        chrome.storage.sync.get(["vocabWords", "vocabMode"], (data) => {
+        chrome.storage.sync.get(["vocabWords", "vocabMode", "blacklistDomains"], (data) => {
             const words = data.vocabWords || [];
-            const mode = data.vocabMode || "replace"; // Default to replace
+            const mode = data.vocabMode || "replace";
+            const blacklist = data.blacklistDomains || [];
 
             vocabList.innerHTML = "";
             words.forEach((word) => {
@@ -25,6 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             modeSelect.value = mode;
+            document.getElementById("blacklistInput").value = blacklist.join(", ");
         });
     }
 
@@ -67,6 +70,17 @@ document.addEventListener("DOMContentLoaded", () => {
             console.log(`Mode set to: ${newMode}`);
         });
     });
+
+    // Save blacklist
+    document.getElementById("saveBlacklist").addEventListener("click", () => {
+        const input = document.getElementById("blacklistInput").value.trim();
+        const domains = input ? input.split(",").map((d) => d.trim().toLowerCase()) : [];
+        chrome.storage.sync.set({ blacklistDomains: domains }, () => {
+            console.log(`Blacklist saved: ${domains}`);
+            alert("Blacklist updated!"); // Simple feedback
+        });
+    });
+
 
     loadData(); // Initial load
 });

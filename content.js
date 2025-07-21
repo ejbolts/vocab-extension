@@ -122,8 +122,18 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
     walk(rootNode);
 }
 
+
+
 // On page load: Get words, send to background, get map and mode, then process
 (async () => {
+    // Check if current domain is blacklisted
+    const { blacklistDomains = [] } = await chrome.storage.sync.get("blacklistDomains");
+    const currentHost = window.location.hostname.toLowerCase();
+    console.log(`Current host: ${currentHost}`);
+    if (blacklistDomains.some((domain) => currentHost.includes(domain))) {
+        console.log(`Domain blacklisted: ${currentHost}. Skipping processing.`);
+        return; // Exit early
+    }
     const pageWords = getPageWords();
     const response = await chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords });
     if (response && response.replacementMap) {

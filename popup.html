@@ -32,6 +32,18 @@
       <option value="replace">Replace Words</option>
       <option value="highlight">Highlight Only</option>
     </select>
+    <div style="margin-top: 10px">
+      <label for="blacklistInput">Domain Blacklist (comma-separated):</label
+      ><br />
+      <textarea
+        id="blacklistInput"
+        rows="3"
+        cols="30"
+        placeholder="e.g., example.com, mail.google.com"
+      ></textarea
+      ><br />
+      <button id="saveBlacklist">Save Blacklist</button>
+    </div>
     <script src="popup.js"></script>
   </body>
 </html>
