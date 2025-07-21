@@ -51,6 +51,15 @@ const STOP_WORDS = new Set([
     "they", "him", "her", "them",
 ]);
 
+// Utility debounce function
+function debounce(func, delay) {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func(...args), delay);
+    };
+}
+
 // Extract and filter unique words from page
 function getPageWords() {
     const text = document.body.innerText.toLowerCase();
@@ -63,8 +72,12 @@ function getPageWords() {
 function replaceVocab(replacementMap, mode, rootNode = document.body) {
     if (Object.keys(replacementMap).length === 0) return;
 
-    const regex = new RegExp(`\\b(${Object.keys(replacementMap).join("|")})\\b`, "gi");
+    // Temporarily disconnect MutationObserver to avoid infinite loops from our own mutations
+    if (window.vocabMutationObserver) {
+        window.vocabMutationObserver.disconnect();
+    }
 
+    const regex = new RegExp(`\\b(${Object.keys(replacementMap).join("|")})\\b`, "gi");
     function walk(node) {
         if (node.nodeType === 3) {
             const originalText = node.nodeValue;
@@ -119,7 +132,16 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
         }
     }
 
+
     walk(rootNode);
+
+    // Reconnect MutationObserver after processing
+    if (window.vocabMutationObserver) {
+        window.vocabMutationObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
 }
 
 
@@ -143,28 +165,66 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
 
 // Main processing function (called on load and mutations)
 function processPage(replacementMap, mode) {
-    replaceVocab(replacementMap, mode); // Run the DOM walk
+    // Initially process the full page (what's visible on load)
+    replaceVocab(replacementMap, mode);
 
-    // Clean up any previous observer
-    if (window.vocabObserver) {
-        window.vocabObserver.disconnect();
+    // Clean up any previous observers
+    if (window.vocabMutationObserver) {
+        window.vocabMutationObserver.disconnect();
+    }
+    if (window.vocabIntersectionObserver) {
+        window.vocabIntersectionObserver.disconnect();
     }
 
-    // Set up MutationObserver for dynamic content
-    window.vocabObserver = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.type === "childList" && mutation.addedNodes.length) {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === 1) {
-                        replaceVocab(replacementMap, mode, node); // Process only the new subtree
-                    }
-                });
+    // Set up IntersectionObserver for viewport visibility
+    window.vocabIntersectionObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (entry.isIntersecting && !entry.target.dataset.vocabProcessed) {
+                // Process this subtree when it enters the viewport
+                replaceVocab(replacementMap, mode, entry.target);
+                entry.target.dataset.vocabProcessed = "true"; // Mark as done
+                window.vocabIntersectionObserver.unobserve(entry.target);
             }
         });
+    }, {
+        root: null,
+        threshold: 0.1
     });
 
-    window.vocabObserver.observe(document.body, {
+    // Set up MutationObserver to detect new content and start observing it for intersection
+    window.vocabMutationObserver = new MutationObserver((mutations) => {
+        let hasRelevantMutations = false;
+        mutations.forEach((mutation) => {
+            if (mutation.type === "childList" && mutation.addedNodes.length) {
+                // Skip if the added nodes look like our own spans (extra safety)
+                const isOurMutation = Array.from(mutation.addedNodes).some(
+                    (node) => node.nodeType === 1 && node.classList?.contains("vocab-replace")
+                );
+                if (!isOurMutation) {
+                    hasRelevantMutations = true;
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1 && node.textContent) {
+                            window.vocabIntersectionObserver.observe(node);
+                        }
+                    });
+                }
+            }
+        });
+        if (hasRelevantMutations) {
+            console.log("Mutation detected, queuing new nodes for viewport observation...");
+        }
+    });
+
+    // Observe the body for mutations
+    window.vocabMutationObserver.observe(document.body, {
         childList: true,
         subtree: true
+    });
+
+    // Observe major sections already on the page
+    document.querySelectorAll("section, article, div").forEach((el) => {
+        if (!el.dataset.vocabProcessed) {
+            window.vocabIntersectionObserver.observe(el);
+        }
     });
 }
