@@ -6,7 +6,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         buildReplacementMap(message.payload).then((result) => {
             sendResponse({ replacementMap: result.map, mode: result.mode });
         });
-        return true; // Async response
+        return true;
+    } else if (message.type === "REPORT_MATCHES") {
+        updateStats(message.payload);
+        return true;
     }
 });
 
@@ -55,4 +58,19 @@ async function buildReplacementMap(pageWords) {
     });
 
     return { map: replacementMap, mode: vocabMode };
+}
+
+async function updateStats(matchedWords) {
+    if (!matchedWords || matchedWords.length === 0) return;
+
+    const { vocabStats = { totalEncounters: 0, pagesProcessed: 0 } } = await chrome.storage.local.get("vocabStats");
+
+    // Update encounters
+    vocabStats.totalEncounters += matchedWords.length;
+
+    // Increment pages only once per report (per page load/process)
+    vocabStats.pagesProcessed += 1;
+
+    await chrome.storage.local.set({ vocabStats });
+    console.log("Stats updated:", vocabStats);
 }

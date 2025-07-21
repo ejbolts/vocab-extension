@@ -10,6 +10,7 @@ tooltip.style.pointerEvents = "none"; // So it doesn't block clicks
 tooltip.style.display = "none";
 tooltip.style.maxWidth = "300px";
 tooltip.style.fontSize = "14px";
+tooltip.id = "vocab-tooltip";
 document.body.appendChild(tooltip);
 
 // Function to show tooltip
@@ -68,11 +69,11 @@ function getPageWords() {
     return [...new Set(filtered)]; // Unique words
 }
 
-// Function to replace/highlight words based on map and mode (optional rootNode for mutations)
+// Function to replace/highlight words based on map and mode
 function replaceVocab(replacementMap, mode, rootNode = document.body) {
     if (Object.keys(replacementMap).length === 0) return;
 
-    // Temporarily disconnect MutationObserver to avoid infinite loops from our own mutations
+    // Temporarily disconnect MutationObserver to avoid infinite loops from mutations
     if (window.vocabMutationObserver) {
         window.vocabMutationObserver.disconnect();
     }
@@ -101,11 +102,13 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
                 span.dataset.original = fullMatch;
                 span.dataset.definition = definition || "No definition available";
 
+                matchedWords.add(lowerMatch); // Add the matched synonym 
+
                 if (mode === "replace") {
                     span.textContent = vocabWord;
                     span.dataset.replacedWith = vocabWord; // Flag for replace mode
                 } else {
-                    span.textContent = fullMatch; // Highlight mode: keep original
+                    span.textContent = fullMatch;
                     span.dataset.vocabMatch = vocabWord; // Flag for highlight mode
                 }
 
@@ -132,8 +135,16 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
         }
     }
 
+    const matchedWords = new Set(); // To collect unique matches in this run
 
     walk(rootNode);
+
+    if (matchedWords.size > 0) {
+        chrome.runtime.sendMessage({
+            type: "REPORT_MATCHES",
+            payload: Array.from(matchedWords)
+        });
+    }
 
     // Reconnect MutationObserver after processing
     if (window.vocabMutationObserver) {
@@ -195,12 +206,24 @@ function processPage(replacementMap, mode) {
     window.vocabMutationObserver = new MutationObserver((mutations) => {
         let hasRelevantMutations = false;
         mutations.forEach((mutation) => {
+
+            // Ignore mutations caused by the tooltip itself
+            if (
+                mutation.target.id === "vocab-tooltip" ||
+                (mutation.addedNodes && Array.from(mutation.addedNodes).some(
+                    node => node.id === "vocab-tooltip" ||
+                        (node.nodeType === 1 && node.closest && node.closest("#vocab-tooltip"))
+                ))
+            ) {
+                return; // Skip this mutation
+            }
+
             if (mutation.type === "childList" && mutation.addedNodes.length) {
-                // Skip if the added nodes look like our own spans (extra safety)
-                const isOurMutation = Array.from(mutation.addedNodes).some(
+                // Skip if the added nodes look like own spans (extra safety)
+                const isOwnMutation = Array.from(mutation.addedNodes).some(
                     (node) => node.nodeType === 1 && node.classList?.contains("vocab-replace")
                 );
-                if (!isOurMutation) {
+                if (!isOwnMutation) {
                     hasRelevantMutations = true;
                     mutation.addedNodes.forEach((node) => {
                         if (node.nodeType === 1 && node.textContent) {

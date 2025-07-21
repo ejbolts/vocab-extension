@@ -5,29 +5,42 @@ document.addEventListener("DOMContentLoaded", () => {
     const modeSelect = document.getElementById("modeSelect");
 
 
-    // Load and display the current vocab list and settings
     function loadData() {
-        chrome.storage.sync.get(["vocabWords", "vocabMode", "blacklistDomains"], (data) => {
-            const words = data.vocabWords || [];
-            const mode = data.vocabMode || "replace";
-            const blacklist = data.blacklistDomains || [];
+        chrome.storage.sync.get(["vocabWords", "vocabMode", "blacklistDomains"], (syncData) => {
+            chrome.storage.local.get(["vocabStats"], (localData) => {
+                const words = syncData.vocabWords || [];
+                const mode = syncData.vocabMode || "replace";
+                const blacklist = syncData.blacklistDomains || [];
+                const stats = localData.vocabStats || { totalEncounters: 0, pagesProcessed: 0 };
 
-            vocabList.innerHTML = "";
-            words.forEach((word) => {
-                const li = document.createElement("li");
-                li.textContent = word;
+                vocabList.innerHTML = "";
+                words.forEach((word) => {
+                    const li = document.createElement("li");
+                    li.textContent = word;
 
-                const deleteBtn = document.createElement("button");
-                deleteBtn.textContent = "Delete";
-                deleteBtn.style.marginLeft = "10px";
-                deleteBtn.addEventListener("click", () => removeWord(word));
+                    const deleteBtn = document.createElement("button");
+                    deleteBtn.textContent = "Delete";
+                    deleteBtn.style.marginLeft = "10px";
+                    deleteBtn.addEventListener("click", () => removeWord(word));
 
-                li.appendChild(deleteBtn);
-                vocabList.appendChild(li);
+                    li.appendChild(deleteBtn);
+                    vocabList.appendChild(li);
+                });
+
+                modeSelect.value = mode;
+                document.getElementById("blacklistInput").value = blacklist.join(", ");
+
+                // Display stats
+                document.getElementById("statWords").textContent = words.length;
+                document.getElementById("statEncounters").textContent = stats.totalEncounters;
+                document.getElementById("statPages").textContent = stats.pagesProcessed;
+
+                // Get current tab URL
+                chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                    const url = tabs[0]?.url || "No active tab";
+                    document.getElementById("currentUrl").textContent = new URL(url).hostname; // Show hostname for blacklisting
+                });
             });
-
-            modeSelect.value = mode;
-            document.getElementById("blacklistInput").value = blacklist.join(", ");
         });
     }
 

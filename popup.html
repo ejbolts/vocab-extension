@@ -32,6 +32,9 @@
       <option value="replace">Replace Words</option>
       <option value="highlight">Highlight Only</option>
     </select>
+
+    <h3>Current Page</h3>
+    <p id="currentUrl">Loading...</p>
     <div style="margin-top: 10px">
       <label for="blacklistInput">Domain Blacklist (comma-separated):</label
       ><br />
@@ -43,17 +46,56 @@
       ></textarea
       ><br />
       <button id="saveBlacklist">Save Blacklist</button>
-      <div style="margin-top: 10px">
-        <button id="exportButton">Export Vocab</button>
-        <button id="importButton">Import Vocab</button>
-        <input
-          type="file"
-          id="importFile"
-          style="display: none"
-          accept=".json"
-        />
-      </div>
     </div>
+
+    <div style="margin-top: 10px">
+      <button id="exportButton">Export Vocab</button>
+      <button id="importButton">Import Vocab</button>
+      <input type="file" id="importFile" style="display: none" accept=".json" />
+    </div>
+
+    <h3>Stats</h3>
+    <ul id="statsList" style="list-style: none; padding: 0">
+      <li>
+        <span
+          title="Count of your saved words."
+          style="
+            cursor: pointer;
+            color: #007bff;
+            margin-left: 4px;
+            font-weight: bold;
+          "
+          >?</span
+        >
+        Total Vocab Words: <span id="statWords">0</span>
+      </li>
+      <li>
+        <span
+          title="Number of times a synonym has been replaced/highlighted (increments per match processed)."
+          style="
+            cursor: pointer;
+            color: #007bff;
+            margin-left: 4px;
+            font-weight: bold;
+          "
+          >?</span
+        >
+        Total Encounters: <span id="statEncounters">0</span>
+      </li>
+      <li>
+        <span
+          title="Total pages where the extension has run (increments on load if not blacklisted)."
+          style="
+            cursor: pointer;
+            color: #007bff;
+            margin-left: 4px;
+            font-weight: bold;
+          "
+          >?</span
+        >
+        Pages Processed: <span id="statPages">0</span>
+      </li>
+    </ul>
     <script src="popup.js"></script>
   </body>
 </html>
