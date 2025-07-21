@@ -2,28 +2,54 @@ document.addEventListener("DOMContentLoaded", () => {
     const wordInput = document.getElementById("wordInput");
     const addButton = document.getElementById("addButton");
     const vocabList = document.getElementById("vocabList");
+    const searchInput = document.getElementById("searchInput");
     const modeSelect = document.getElementById("modeSelect");
+    const exportButton = document.getElementById("exportButton");
+    const importButton = document.getElementById("importButton");
+    const importFile = document.getElementById("importFile");
 
+    let allWords = []; // Cache of all vocab words for filtering
 
-    function loadData() {
+    // Load and display data
+    function loadData(filter = "") {
         chrome.storage.sync.get(["vocabWords", "vocabMode", "blacklistDomains"], (syncData) => {
             chrome.storage.local.get(["vocabStats"], (localData) => {
-                const words = syncData.vocabWords || [];
+                allWords = syncData.vocabWords || [];
                 const mode = syncData.vocabMode || "replace";
                 const blacklist = syncData.blacklistDomains || [];
                 const stats = localData.vocabStats || { totalEncounters: 0, pagesProcessed: 0 };
 
+                // Filter words based on search
+                const filteredWords = allWords.filter((word) =>
+                    word.toLowerCase().includes(filter.toLowerCase())
+                );
+
                 vocabList.innerHTML = "";
-                words.forEach((word) => {
+                filteredWords.forEach((word) => {
                     const li = document.createElement("li");
                     li.textContent = word;
 
+                    // Delete button
                     const deleteBtn = document.createElement("button");
                     deleteBtn.textContent = "Delete";
                     deleteBtn.style.marginLeft = "10px";
                     deleteBtn.addEventListener("click", () => removeWord(word));
 
                     li.appendChild(deleteBtn);
+
+                    // Expandable synonyms section
+                    const synonymsDiv = document.createElement("div");
+                    synonymsDiv.className = "synonyms";
+                    synonymsDiv.innerHTML = `<p>Loading synonyms...</p>`;
+                    li.appendChild(synonymsDiv);
+
+                    // Click to toggle synonyms
+                    li.addEventListener("click", (event) => {
+                        if (event.target !== deleteBtn) { // Avoid triggering on delete click
+                            toggleSynonyms(word, synonymsDiv);
+                        }
+                    });
+
                     vocabList.appendChild(li);
                 });
 
@@ -31,16 +57,35 @@ document.addEventListener("DOMContentLoaded", () => {
                 document.getElementById("blacklistInput").value = blacklist.join(", ");
 
                 // Display stats
-                document.getElementById("statWords").textContent = words.length;
+                document.getElementById("statWords").textContent = allWords.length;
                 document.getElementById("statEncounters").textContent = stats.totalEncounters;
                 document.getElementById("statPages").textContent = stats.pagesProcessed;
 
                 // Get current tab URL
                 chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                     const url = tabs[0]?.url || "No active tab";
-                    document.getElementById("currentUrl").textContent = new URL(url).hostname; // Show hostname for blacklisting
+                    document.getElementById("currentUrl").textContent = new URL(url).hostname;
                 });
             });
+        });
+    }
+
+    // Toggle synonyms display
+    function toggleSynonyms(word, synonymsDiv) {
+        if (synonymsDiv.style.display === "block") {
+            synonymsDiv.style.display = "none";
+            return;
+        }
+
+        chrome.storage.local.get(word, (data) => {
+            const cachedData = data[word];
+            if (cachedData && cachedData.synonyms && cachedData.synonyms.length > 0) {
+                const synonymList = cachedData.synonyms.map((syn) => `<li>${syn.word}</li>`).join("");
+                synonymsDiv.innerHTML = `<ul>${synonymList}</ul>`;
+            } else {
+                synonymsDiv.innerHTML = `<p>No synonyms found. Try re-adding the word to refresh cache.</p>`;
+            }
+            synonymsDiv.style.display = "block";
         });
     }
 
@@ -53,10 +98,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!words.includes(newWord)) {
                     words.push(newWord);
                     chrome.storage.sync.set({ vocabWords: words }, () => {
-                        // Notify background to fetch data
                         chrome.runtime.sendMessage({ type: "ADD_WORD", word: newWord });
                         wordInput.value = "";
-                        loadData();
+                        loadData(searchInput.value); // Refresh with current filter
                     });
                 }
             });
@@ -69,19 +113,16 @@ document.addEventListener("DOMContentLoaded", () => {
             let words = data.vocabWords || [];
             words = words.filter((w) => w !== wordToRemove);
             chrome.storage.sync.set({ vocabWords: words }, () => {
-                // Also remove from cache
                 chrome.storage.local.remove(wordToRemove);
-                loadData();
+                loadData(searchInput.value); // Refresh with current filter
             });
         });
     }
 
-    // Save mode setting on change
+    // Save mode setting
     modeSelect.addEventListener("change", (event) => {
         const newMode = event.target.value;
-        chrome.storage.sync.set({ vocabMode: newMode }, () => {
-            console.log(`Mode set to: ${newMode}`);
-        });
+        chrome.storage.sync.set({ vocabMode: newMode });
     });
 
     // Save blacklist
@@ -89,16 +130,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const input = document.getElementById("blacklistInput").value.trim();
         const domains = input ? input.split(",").map((d) => d.trim().toLowerCase()) : [];
         chrome.storage.sync.set({ blacklistDomains: domains }, () => {
-            console.log(`Blacklist saved: ${domains}`);
-            alert("Blacklist updated!"); // Simple feedback
+            alert("Blacklist updated!");
         });
     });
 
 
-
-    const exportButton = document.getElementById("exportButton");
-    const importButton = document.getElementById("importButton");
-    const importFile = document.getElementById("importFile");
 
     // Export vocab and cache as JSON
     exportButton.addEventListener("click", async () => {
@@ -176,7 +212,10 @@ document.addEventListener("DOMContentLoaded", () => {
             reader.readAsText(file);
         }
     });
-
+    // Search filtering
+    searchInput.addEventListener("input", (event) => {
+        loadData(event.target.value); // Re-render with filter
+    });
 
     loadData(); // Initial load
 });
