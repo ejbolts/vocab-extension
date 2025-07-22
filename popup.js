@@ -67,6 +67,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
 
                 modeSelect.value = mode;
+
+                const enableState = syncData.enableExtension !== false; // Default to true (on)
+                const enableToggle = document.getElementById("enableToggle");
+                enableToggle.checked = enableState;
+                document.getElementById("toggleLabel").textContent = enableState ? "On" : "Off";
+
                 document.getElementById("blacklistInput").value = blacklist.join(", ");
 
                 // Display stats
@@ -167,6 +173,20 @@ document.addEventListener("DOMContentLoaded", () => {
     modeSelect.addEventListener("change", (event) => {
         const newMode = event.target.value;
         chrome.storage.sync.set({ vocabMode: newMode });
+    });
+
+    // Enable/Disable toggle
+    document.getElementById("enableToggle").addEventListener("change", (event) => {
+        const newState = event.target.checked;
+        chrome.storage.sync.set({ enableExtension: newState }, () => {
+            document.getElementById("toggleLabel").textContent = newState ? "On" : "Off";
+            // Message active tab's content script for real-time update
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    chrome.tabs.sendMessage(tabs[0].id, { type: "TOGGLE_ENABLE", enable: newState });
+                }
+            });
+        });
     });
 
     // Save blacklist

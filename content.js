@@ -1,48 +1,118 @@
 // Create a single tooltip element (shared for all hovers)
+// Shared hover state and timeout for tooltip hiding
+let tooltipHover = false;
+let spanHover = false;
+let hideTimeout = null;
 const tooltip = document.createElement("div");
+tooltip.id = "vocab-tooltip"; // For mutation ignoring
 tooltip.style.position = "absolute";
 tooltip.style.backgroundColor = "#333";
 tooltip.style.color = "#fff";
 tooltip.style.padding = "8px";
 tooltip.style.borderRadius = "4px";
 tooltip.style.zIndex = "9999";
-tooltip.style.pointerEvents = "none"; // So it doesn't block clicks
-tooltip.style.display = "none";
 tooltip.style.maxWidth = "300px";
 tooltip.style.fontSize = "14px";
-tooltip.id = "vocab-tooltip";
+tooltip.style.display = "none";
+tooltip.style.pointerEvents = "auto"; // Allow interactions (buttons clickable)
 document.body.appendChild(tooltip);
 
-// Function to show tooltip
+// Function to show tooltip (now stays open until closed)
 function showTooltip(event, span) {
-    let content = '';
-
-    if (span.dataset.replacedWith) {
-        // Replace mode: Show original and definition
-        content = `
-      <strong>Original word:</strong> ${span.dataset.original}<br>
-      <strong>Definition (${span.dataset.original}):</strong> ${span.dataset.definition}
-    `;
-    } else if (span.dataset.vocabMatch) {
-        // Highlight mode: Show vocab match and definition
-        content = `
-      <strong>Vocab Match:</strong> ${span.dataset.vocabMatch}<br>
-      <strong>Definition:</strong> ${span.dataset.definition}
-    `;
-    } else {
-        // Fallback (shouldn't happen)
-        content = 'No data available';
+    // Remove any pending hide
+    if (hideTimeout) {
+        clearTimeout(hideTimeout);
+        hideTimeout = null;
     }
+    spanHover = true;
+    // Set up tooltip hover listeners (only once)
+    if (!tooltip._hoverListenersSet) {
+        tooltip.addEventListener("mouseenter", () => {
+            tooltipHover = true;
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+            }
+        });
+        tooltip.addEventListener("mouseleave", () => {
+            tooltipHover = false;
+            maybeHideTooltip();
+        });
+        tooltip._hoverListenersSet = true;
+    }
+    const original = span.dataset.original;
+    const definition = span.dataset.definition;
+    const currentVocab = span.dataset.replacedWith || span.dataset.vocabMatch; // Current mapping
+    const currentMode = span.dataset.mode || "replace"; // Assume from creation
 
-    tooltip.innerHTML = content;
-    tooltip.style.display = "block";
+    // Build interactive content
+    tooltip.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <strong>${span.textContent}</strong>
+      <button id="closeTooltip" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 16px;">×</button>
+    </div>
+    <p><strong>Original:</strong> ${original}</p>
+    <p><strong>Definition:</strong> ${definition}</p>
+    <button id="toggleOriginal" style="display: block; margin: 5px 0; padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Show Original</button>
+    <button id="ignoreInstance" style="display: block; margin: 5px 0; padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Ignore This Instance</button>
+    <div style="margin-top: 5px;">
+      <button id="switchToHighlight" style="padding: 4px; background: #555; border: none; color: #fff; cursor: pointer; margin-right: 5px;">Switch to Highlight</button>
+      <button id="switchToReplace" style="padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Switch to Replace</button>
+    </div>
+  `;
+
+    // Position near mouse
     tooltip.style.left = `${event.pageX + 10}px`;
     tooltip.style.top = `${event.pageY + 10}px`;
+    tooltip.style.display = "block";
+
+    // Close button (only way to hide)
+    document.getElementById("closeTooltip").addEventListener("click", hideTooltip);
+
+    // Toggle Original/Replace button
+    const toggleBtn = document.getElementById("toggleOriginal");
+    let showingOriginal = false;
+    toggleBtn.addEventListener("click", () => {
+        if (!showingOriginal) {
+            span.textContent = original; // Show original
+            toggleBtn.textContent = "Show Replace";
+            showingOriginal = true;
+        } else {
+            span.textContent = currentVocab; // Show replaced
+            toggleBtn.textContent = "Show Original";
+            showingOriginal = false;
+        }
+    });
+
+    // Ignore This Instance button
+    document.getElementById("ignoreInstance").addEventListener("click", () => {
+        const parent = span.parentNode;
+        parent.replaceChild(document.createTextNode(original), span); // Revert to plain text
+        hideTooltip();
+    });
+
+    // Mode switch buttons
+    document.getElementById("switchToHighlight").addEventListener("click", () => switchMode("highlight"));
+    document.getElementById("switchToReplace").addEventListener("click", () => switchMode("replace"));
 }
 
 // Function to hide tooltip
 function hideTooltip() {
     tooltip.style.display = "none";
+    tooltip.innerHTML = ""; // Clear content
+}
+
+// Function to switch mode real-time
+async function switchMode(newMode) {
+    await chrome.storage.sync.set({ vocabMode: newMode });
+    revertAllModifications(); // Undo current changes
+    // Re-fetch page words and re-process with new mode
+    const pageWords = getPageWords();
+    const response = await chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords });
+    if (response && response.replacementMap) {
+        processPage(response.replacementMap, newMode);
+    }
+    hideTooltip(true); // Close tooltip after switch
 }
 
 const STOP_WORDS = new Set([
@@ -59,6 +129,18 @@ function debounce(func, delay) {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => func(...args), delay);
     };
+}
+
+// Hide tooltip only if mouse is not over span or tooltip, after 300ms
+function maybeHideTooltip() {
+    if (!spanHover && !tooltipHover) {
+        if (hideTimeout) clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(() => {
+            if (!spanHover && !tooltipHover) {
+                hideTooltip();
+            }
+        }, 300);
+    }
 }
 
 // Extract and filter unique words from page
@@ -112,11 +194,21 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
                     span.dataset.vocabMatch = vocabWord; // Flag for highlight mode
                 }
 
-                // Hover listeners (pass the span to showTooltip)
+
+                // Hover listeners (shared state)
                 span.addEventListener("mouseenter", (event) => {
-                    showTooltip(event, span);  // Updated to pass span
+                    spanHover = true;
+                    if (hideTimeout) {
+                        clearTimeout(hideTimeout);
+                        hideTimeout = null;
+                    }
+                    showTooltip(event, span);
                 });
-                span.addEventListener("mouseleave", hideTooltip);
+                span.addEventListener("mouseleave", () => {
+                    spanHover = false;
+                    maybeHideTooltip();
+                });
+
 
                 fragment.appendChild(span);
 
@@ -154,7 +246,14 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
         });
     }
 }
-
+// Function to revert all modifications (undo spans, restore original text)
+function revertAllModifications() {
+    const spans = document.querySelectorAll(".vocab-replace");
+    spans.forEach((span) => {
+        const parent = span.parentNode;
+        parent.replaceChild(document.createTextNode(span.dataset.original), span);
+    });
+}
 
 
 // On page load: Get words, send to background, get map and mode, then process
@@ -251,3 +350,26 @@ function processPage(replacementMap, mode) {
         }
     });
 }
+// Listen for messages from popup (e.g., enable/disable)
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === "TOGGLE_ENABLE") {
+        if (message.enable) {
+            // Re-enable: Re-fetch map and process with current mode
+            chrome.storage.sync.get("vocabMode", async (data) => {
+                const mode = data.vocabMode || "replace";
+                const pageWords = getPageWords();
+                const response = await chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords });
+                if (response && response.replacementMap) {
+                    processPage(response.replacementMap, mode); // Your existing process function
+                }
+            });
+        } else {
+            // Disable: Revert DOM and stop observers
+            revertAllModifications();
+            if (window.vocabMutationObserver) window.vocabMutationObserver.disconnect();
+            if (window.vocabIntersectionObserver) window.vocabIntersectionObserver.disconnect();
+        }
+        sendResponse({ success: true });
+    }
+    return true; // For async
+});

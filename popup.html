@@ -31,9 +31,10 @@
         display: flex;
         align-items: center; /* Align icon and text vertically */
         margin: 5px 0;
-        cursor: pointer; /* Indicate clickable */
+        /* Indicate clickable */
       }
       .vocab-word:hover {
+        cursor: pointer;
         background-color: #f0f0f0; /* Hover effect */
       }
       li.selected {
@@ -70,9 +71,61 @@
       #closeSynonyms:hover {
         color: #f00;
       }
+      #enableToggle:checked + span {
+        background-color: #2196f3;
+      }
+      #enableToggle:checked + span + .slider {
+        transform: translateX(20px);
+      }
     </style>
   </head>
   <body>
+    <div style="margin-top: 10px; display: flex; align-items: center">
+      <label for="enableToggle" style="margin-right: 10px">Extension:</label>
+      <label
+        style="
+          position: relative;
+          display: inline-block;
+          width: 40px;
+          height: 20px;
+        "
+      >
+        <input
+          type="checkbox"
+          id="enableToggle"
+          style="opacity: 0; width: 0; height: 0"
+        />
+        <span
+          style="
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 20px;
+          "
+        ></span>
+        <span
+          style="
+            position: absolute;
+            content: '';
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+          "
+          class="slider"
+        ></span>
+      </label>
+      <span id="toggleLabel" style="margin-left: 10px">Off</span>
+    </div>
+
     <h2>Add a Word</h2>
     <input type="text" id="wordInput" placeholder="Enter a word" />
     <button id="addButton">Add</button>

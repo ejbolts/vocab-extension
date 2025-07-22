@@ -1,3 +1,32 @@
+// Create context menu for adding selected text to vocab
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.contextMenus.create({
+        id: "addToVocab",
+        title: "Add to Vocab Booster",
+        contexts: ["selection"] // Only show when text is selected
+    });
+});
+
+// Handle context menu click
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === "addToVocab" && info.selectionText) {
+        const newWord = info.selectionText.trim().toLowerCase();
+        if (newWord) {
+            // Add to vocab list and fetch data (same as popup add)
+            chrome.storage.sync.get("vocabWords", (data) => {
+                const words = data.vocabWords || [];
+                if (!words.includes(newWord)) {
+                    words.push(newWord);
+                    chrome.storage.sync.set({ vocabWords: words }, () => {
+                        fetchDataAndCache(newWord); // Your existing fetch function
+                        console.log(`Added "${newWord}" via context menu`);
+                    });
+                }
+            });
+        }
+    }
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "ADD_WORD") {
         fetchDataAndCache(message.word);
