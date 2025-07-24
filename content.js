@@ -55,8 +55,7 @@ function showTooltip(event, span) {
     <button id="toggleOriginal" style="display: block; margin: 5px 0; padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Show Original</button>
     <button id="ignoreInstance" style="display: block; margin: 5px 0; padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Ignore This Instance</button>
     <div style="margin-top: 5px;">
-      <button id="switchToHighlight" style="padding: 4px; background: #555; border: none; color: #fff; cursor: pointer; margin-right: 5px;">Switch to Highlight</button>
-      <button id="switchToReplace" style="padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Switch to Replace</button>
+      <button id="toggleMode" style="padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Switch to ${currentMode === "replace" ? "Highlight" : "Replace"} Mode</button>
     </div>
   `;
 
@@ -87,12 +86,33 @@ function showTooltip(event, span) {
     document.getElementById("ignoreInstance").addEventListener("click", () => {
         const parent = span.parentNode;
         parent.replaceChild(document.createTextNode(original), span); // Revert to plain text
+        // Add to ignoredWords in chrome.storage.sync
+        chrome.storage.sync.get("ignoredWords", (data) => {
+            let ignoredWords = data.ignoredWords || [];
+            if (!ignoredWords.includes(original.toLowerCase())) {
+                ignoredWords.push(original.toLowerCase());
+                chrome.storage.sync.set({ ignoredWords });
+            }
+        });
         hideTooltip();
     });
 
-    // Mode switch buttons
-    document.getElementById("switchToHighlight").addEventListener("click", () => switchMode("highlight"));
-    document.getElementById("switchToReplace").addEventListener("click", () => switchMode("replace"));
+    // Mode switch button
+    document.getElementById("toggleMode").addEventListener("click", async () => {
+        const newMode = currentMode === "replace" ? "highlight" : "replace";
+        await chrome.storage.sync.set({ vocabMode: newMode });
+        revertAllModifications();
+        // Re-fetch page words and re-process with new mode
+        const pageWords = getPageWords();
+        chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords }, async (response) => {
+            const { ignoredWords = [] } = await chrome.storage.sync.get("ignoredWords");
+            const ignoredSet = new Set(ignoredWords.map(w => w.toLowerCase()));
+            if (response && response.replacementMap) {
+                processPage(response.replacementMap, newMode, ignoredSet);
+            }
+        });
+        hideTooltip();
+    });
 }
 
 // Function to hide tooltip
@@ -101,18 +121,7 @@ function hideTooltip() {
     tooltip.innerHTML = ""; // Clear content
 }
 
-// Function to switch mode real-time
-async function switchMode(newMode) {
-    await chrome.storage.sync.set({ vocabMode: newMode });
-    revertAllModifications(); // Undo current changes
-    // Re-fetch page words and re-process with new mode
-    const pageWords = getPageWords();
-    const response = await chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords });
-    if (response && response.replacementMap) {
-        processPage(response.replacementMap, newMode);
-    }
-    hideTooltip(true); // Close tooltip after switch
-}
+
 
 const STOP_WORDS = new Set([
     "a", "about", "an", "and", "are", "as", "at", "be", "by", "for", "from",
@@ -151,7 +160,7 @@ function getPageWords() {
 }
 
 // Function to replace/highlight words based on map and mode
-function replaceVocab(replacementMap, mode, rootNode = document.body) {
+function replaceVocab(replacementMap, mode, ignoredWords = new Set(), rootNode = document.body) {
     if (Object.keys(replacementMap).length === 0) return;
 
     // Temporarily disconnect MutationObserver to avoid infinite loops from mutations
@@ -172,6 +181,12 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
             let lastIndex = 0;
 
             originalText.replace(regex, (fullMatch, captured, offset) => {
+                // Skip if ignored
+                if (ignoredWords.has(fullMatch.toLowerCase())) {
+                    fragment.appendChild(document.createTextNode(originalText.slice(lastIndex, offset + fullMatch.length)));
+                    lastIndex = offset + fullMatch.length;
+                    return;
+                }
                 hasReplacements = true;
 
                 fragment.appendChild(
@@ -186,6 +201,7 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
                 span.style.backgroundColor = "yellow";
                 span.dataset.original = fullMatch;
                 span.dataset.definition = definition || "No definition available";
+                span.dataset.mode = mode; // Add this line
 
                 matchedWords.add(lowerMatch); // Add the matched synonym 
 
@@ -196,7 +212,6 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
                     span.textContent = fullMatch;
                     span.dataset.vocabMatch = vocabWord; // Flag for highlight mode
                 }
-
 
                 // Hover listeners (shared state)
                 span.addEventListener("mouseenter", (event) => {
@@ -211,7 +226,6 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
                     spanHover = false;
                     maybeHideTooltip();
                 });
-
 
                 fragment.appendChild(span);
 
@@ -271,15 +285,17 @@ function revertAllModifications() {
     }
     const pageWords = getPageWords();
     const response = await chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords });
+    const { ignoredWords = [] } = await chrome.storage.sync.get("ignoredWords");
+    const ignoredSet = new Set(ignoredWords.map(w => w.toLowerCase()));
     if (response && response.replacementMap) {
-        processPage(response.replacementMap, response.mode || "replace");
+        processPage(response.replacementMap, response.mode || "replace", ignoredSet);
     }
 })();
 
 // Main processing function (called on load and mutations)
-function processPage(replacementMap, mode) {
+function processPage(replacementMap, mode, ignoredSet = new Set()) {
     // Initially process the full page (what's visible on load)
-    replaceVocab(replacementMap, mode);
+    replaceVocab(replacementMap, mode, ignoredSet);
 
     // Clean up any previous observers
     if (window.vocabMutationObserver) {
@@ -294,7 +310,7 @@ function processPage(replacementMap, mode) {
         entries.forEach((entry) => {
             if (entry.isIntersecting && !entry.target.dataset.vocabProcessed) {
                 // Process this subtree when it enters the viewport
-                replaceVocab(replacementMap, mode, entry.target);
+                replaceVocab(replacementMap, mode, ignoredSet, entry.target);
                 entry.target.dataset.vocabProcessed = "true"; // Mark as done
                 window.vocabIntersectionObserver.unobserve(entry.target);
             }
@@ -362,8 +378,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 const mode = data.vocabMode || "replace";
                 const pageWords = getPageWords();
                 const response = await chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords });
+                const { ignoredWords = [] } = await chrome.storage.sync.get("ignoredWords");
+                const ignoredSet = new Set(ignoredWords.map(w => w.toLowerCase()));
                 if (response && response.replacementMap) {
-                    processPage(response.replacementMap, mode); // Your existing process function
+                    processPage(response.replacementMap, mode, ignoredSet); // Your existing process function
                 }
             });
         } else {
@@ -377,9 +395,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         revertAllModifications(); // Undo current changes
         // Re-fetch page words and re-process with new mode
         const pageWords = getPageWords();
-        chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords }, (response) => {
+        chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords }, async (response) => {
+            const { ignoredWords = [] } = await chrome.storage.sync.get("ignoredWords");
+            const ignoredSet = new Set(ignoredWords.map(w => w.toLowerCase()));
             if (response && response.replacementMap) {
-                processPage(response.replacementMap, message.mode);
+                processPage(response.replacementMap, message.mode, ignoredSet);
+            }
+        });
+        sendResponse({ success: true });
+    } else if (message.type === "UNIGNORE_WORD") {
+        // Re-process the page to re-highlight the unignored word
+        revertAllModifications();
+        const pageWords = getPageWords();
+        chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords }, async (response) => {
+            const { ignoredWords = [] } = await chrome.storage.sync.get("ignoredWords");
+            const ignoredSet = new Set(ignoredWords.map(w => w.toLowerCase()));
+            if (response && response.replacementMap) {
+                processPage(response.replacementMap, response.mode || "replace", ignoredSet);
             }
         });
         sendResponse({ success: true });

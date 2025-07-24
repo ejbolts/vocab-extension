@@ -7,12 +7,45 @@ chrome.runtime.onInstalled.addListener(() => {
     });
 });
 
+// Add context menu for un-ignoring a word
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.contextMenus.create({
+        id: "unignoreVocab",
+        title: "Unignore Word",
+        contexts: ["selection"]
+    });
+});
+
+// Helper to update visibility of unignore menu
+function updateUnignoreMenu(selectionText) {
+    chrome.storage.sync.get("ignoredWords", (data) => {
+        const ignoredWords = data.ignoredWords || [];
+        const word = selectionText.trim().toLowerCase();
+        chrome.contextMenus.update("unignoreVocab", {
+            visible: ignoredWords.includes(word)
+        });
+    });
+}
+
+// Listen for context menu shown event to update unignore menu visibility
+function updateUnignoreMenu(selectionText) {
+    chrome.storage.sync.get("ignoredWords", (data) => {
+        const ignoredWords = data.ignoredWords || [];
+        const word = selectionText.trim().toLowerCase();
+        chrome.contextMenus.update("unignoreVocab", {
+            visible: ignoredWords.includes(word)
+        });
+    });
+}
+
+
+
+
 // Handle context menu click
 chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === "addToVocab" && info.selectionText) {
         const newWord = info.selectionText.trim().toLowerCase();
         if (newWord) {
-            // Add to vocab list and fetch data (same as popup add)
             chrome.storage.sync.get("vocabWords", (data) => {
                 const words = data.vocabWords || [];
                 if (!words.includes(newWord)) {
@@ -24,6 +57,36 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                 }
             });
         }
+    } else if (info.menuItemId === "unignoreVocab" && info.selectionText) {
+        const word = info.selectionText.trim().toLowerCase();
+        chrome.storage.sync.get("ignoredWords", (data) => {
+            let ignoredWords = data.ignoredWords || [];
+            if (ignoredWords.includes(word)) {
+                ignoredWords = ignoredWords.filter(w => w !== word);
+                chrome.storage.sync.set({ ignoredWords }, () => {
+                    chrome.notifications?.create({
+                        type: "basic",
+                        iconUrl: "icon.png",
+                        title: "Vocab Booster",
+                        message: `Unignored '${word}'.`
+                    });
+                    console.log(`Unignored '${word}' via context menu`);
+                    // Send message to active tab to re-process page
+                    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                        if (tabs[0]) {
+                            chrome.tabs.sendMessage(tabs[0].id, { type: "UNIGNORE_WORD", word });
+                        }
+                    });
+                });
+            } else {
+                chrome.notifications?.create({
+                    type: "basic",
+                    iconUrl: "icon.png",
+                    title: "Vocab Booster",
+                    message: `'${word}' is not ignored.`
+                });
+            }
+        });
     }
 });
 
