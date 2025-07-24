@@ -48,10 +48,9 @@ function showTooltip(event, span) {
     // Build interactive content
     tooltip.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <strong>${span.textContent}</strong>
+      <p><strong>Original:</strong> ${original}</p>
       <button id="closeTooltip" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 16px;">×</button>
     </div>
-    <p><strong>Original:</strong> ${original}</p>
     <p><strong>Definition:</strong> ${definition}</p>
     <button id="toggleOriginal" style="display: block; margin: 5px 0; padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Show Original</button>
     <button id="ignoreInstance" style="display: block; margin: 5px 0; padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Ignore This Instance</button>
@@ -162,6 +161,10 @@ function replaceVocab(replacementMap, mode, rootNode = document.body) {
 
     const regex = new RegExp(`\\b(${Object.keys(replacementMap).join("|")})\\b`, "gi");
     function walk(node) {
+        // Skip if node is inside the tooltip
+        if (node.nodeType === 1 && node.closest && node.closest("#vocab-tooltip")) {
+            return; // Don't process tooltip content
+        }
         if (node.nodeType === 3) {
             const originalText = node.nodeValue;
             let hasReplacements = false;
@@ -369,6 +372,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (window.vocabMutationObserver) window.vocabMutationObserver.disconnect();
             if (window.vocabIntersectionObserver) window.vocabIntersectionObserver.disconnect();
         }
+        sendResponse({ success: true });
+    } else if (message.type === "SWITCH_MODE") {
+        revertAllModifications(); // Undo current changes
+        // Re-fetch page words and re-process with new mode
+        const pageWords = getPageWords();
+        chrome.runtime.sendMessage({ type: "PAGE_WORDS", payload: pageWords }, (response) => {
+            if (response && response.replacementMap) {
+                processPage(response.replacementMap, message.mode);
+            }
+        });
         sendResponse({ success: true });
     }
     return true; // For async

@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const addButton = document.getElementById("addButton");
     const vocabList = document.getElementById("vocabList");
     const searchInput = document.getElementById("searchInput");
-    const modeSelect = document.getElementById("modeSelect");
+    const modeSelect = document.getElementById("modeToggle");
     const exportButton = document.getElementById("exportButton");
     const importButton = document.getElementById("importButton");
     const importFile = document.getElementById("importFile");
@@ -22,6 +22,9 @@ document.addEventListener("DOMContentLoaded", () => {
             chrome.storage.local.get(["vocabStats"], (localData) => {
                 allWords = syncData.vocabWords || [];
                 const mode = syncData.vocabMode || "replace";
+                const modeToggle = document.getElementById("modeToggle");
+                modeToggle.checked = (mode === "replace");
+                document.getElementById("modeLabel").textContent = modeToggle.checked ? "Replace" : "Highlight";
                 const blacklist = syncData.blacklistDomains || [];
                 const stats = localData.vocabStats || { totalEncounters: 0, pagesProcessed: 0 };
 
@@ -154,6 +157,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             });
         }
+    });
+
+    // Mode toggle (Highlight/Replace)
+    document.getElementById("modeToggle").addEventListener("change", (event) => {
+        const newMode = event.target.checked ? "replace" : "highlight";
+        chrome.storage.sync.set({ vocabMode: newMode }, () => {
+            document.getElementById("modeLabel").textContent = newMode.charAt(0).toUpperCase() + newMode.slice(1);
+            // Message active tab's content script for real-time mode switch
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    chrome.tabs.sendMessage(tabs[0].id, { type: "SWITCH_MODE", mode: newMode });
+                }
+            });
+        });
     });
 
     // Remove a word

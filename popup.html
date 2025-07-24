@@ -77,6 +77,12 @@
       #enableToggle:checked + span + .slider {
         transform: translateX(20px);
       }
+      #modeToggle:checked + span {
+        background-color: #2196f3;
+      }
+      #modeToggle:checked + span + .slider {
+        transform: translateX(20px);
+      }
     </style>
   </head>
   <body>
@@ -145,10 +151,51 @@
     </div>
 
     <h3>Settings</h3>
-    <select id="modeSelect">
-      <option value="replace">Replace Words</option>
-      <option value="highlight">Highlight Only</option>
-    </select>
+    <div style="margin-top: 10px; display: flex; align-items: center">
+      <label for="modeToggle" style="margin-right: 10px">Mode:</label>
+      <label
+        style="
+          position: relative;
+          display: inline-block;
+          width: 40px;
+          height: 20px;
+        "
+      >
+        <input
+          type="checkbox"
+          id="modeToggle"
+          style="opacity: 0; width: 0; height: 0"
+        />
+        <span
+          style="
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 20px;
+          "
+        ></span>
+        <span
+          style="
+            position: absolute;
+            content: '';
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+          "
+          class="slider"
+        ></span>
+      </label>
+      <span id="modeLabel" style="margin-left: 10px">Highlight</span>
+    </div>
 
     <h3>Current Page</h3>
     <p id="currentUrl">Loading...</p>
