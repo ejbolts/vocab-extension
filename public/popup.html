@@ -86,57 +86,30 @@
     </style>
   </head>
   <body>
-    <div style="margin-top: 10px; display: flex; align-items: center">
-      <label for="enableToggle" style="margin-right: 10px">Extension:</label>
-      <label
-        style="
-          position: relative;
-          display: inline-block;
-          width: 40px;
-          height: 20px;
-        "
-      >
-        <input
-          type="checkbox"
-          id="enableToggle"
-          style="opacity: 0; width: 0; height: 0"
-        />
-        <span
-          style="
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: 0.4s;
-            border-radius: 20px;
-          "
-        ></span>
-        <span
-          style="
-            position: absolute;
-            content: '';
-            height: 16px;
-            width: 16px;
-            left: 2px;
-            bottom: 2px;
-            background-color: white;
-            transition: 0.4s;
-            border-radius: 50%;
-          "
-          class="slider"
-        ></span>
-      </label>
-      <span id="toggleLabel" style="margin-left: 10px">Off</span>
+    <div
+      style="margin-top: 10px; display: flex; align-items: center; gap: 10px"
+    >
+      <label for="enableButton" style="margin-right: 4px">Extension:</label>
+      <button id="enableButton" style="padding: 4px 10px">Off</button>
     </div>
 
     <h2>Add a Word</h2>
     <input type="text" id="wordInput" placeholder="Enter a word" />
     <button id="addButton">Add</button>
 
-    <h3>Your Vocab List</h3>
+    <h3>
+      <span
+        title="Words you are currently learning, synonyms of these words will be highlighted"
+        style="
+          cursor: pointer;
+          color: #007bff;
+          margin-left: 4px;
+          font-weight: bold;
+        "
+        >?
+      </span>
+      Your Vocab List
+    </h3>
     <input type="text" id="searchInput" placeholder="Search words..." />
     <div id="vocabListContainer">
       <ul id="vocabList"></ul>
@@ -150,51 +123,25 @@
       <ul id="synonymsList"></ul>
     </div>
 
-    <h3>Settings</h3>
-    <div style="margin-top: 10px; display: flex; align-items: center">
-      <label for="modeToggle" style="margin-right: 10px">Mode:</label>
-      <label
+    <h3>
+      <span
+        id="modeHelp"
+        title="Highlighting words that are synonyms of words you are currently learning."
         style="
-          position: relative;
-          display: inline-block;
-          width: 40px;
-          height: 20px;
+          cursor: pointer;
+          color: #007bff;
+          margin-left: 4px;
+          font-weight: bold;
         "
-      >
-        <input
-          type="checkbox"
-          id="modeToggle"
-          style="opacity: 0; width: 0; height: 0"
-        />
-        <span
-          style="
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: 0.4s;
-            border-radius: 20px;
-          "
-        ></span>
-        <span
-          style="
-            position: absolute;
-            content: '';
-            height: 16px;
-            width: 16px;
-            left: 2px;
-            bottom: 2px;
-            background-color: white;
-            transition: 0.4s;
-            border-radius: 50%;
-          "
-          class="slider"
-        ></span>
-      </label>
-      <span id="modeLabel" style="margin-left: 10px">Highlight</span>
+        >?
+      </span>
+      Settings
+    </h3>
+    <div
+      style="margin-top: 10px; display: flex; align-items: center; gap: 10px"
+    >
+      <label for="modeButton" style="margin-right: 4px">Mode:</label>
+      <button id="modeButton" style="padding: 4px 10px">Highlight</button>
     </div>
 
     <h3>Current Page</h3>
@@ -218,6 +165,11 @@
       <input type="file" id="importFile" style="display: none" accept=".json" />
     </div>
 
+    <h3>Ignored Words</h3>
+    <div id="ignoredListContainer">
+      <ul id="ignoreList" style="list-style: none; padding: 0; margin: 0"></ul>
+    </div>
+
     <h3>Stats</h3>
     <ul id="statsList" style="list-style: none; padding: 0">
       <li>
@@ -229,8 +181,8 @@
             margin-left: 4px;
             font-weight: bold;
           "
-          >?</span
-        >
+          >?
+        </span>
         Total Vocab Words: <span id="statWords">0</span>
       </li>
       <li>
@@ -242,8 +194,8 @@
             margin-left: 4px;
             font-weight: bold;
           "
-          >?</span
-        >
+          >?
+        </span>
         Total Encounters: <span id="statEncounters">0</span>
       </li>
       <li>
@@ -255,8 +207,8 @@
             margin-left: 4px;
             font-weight: bold;
           "
-          >?</span
-        >
+          >?
+        </span>
         Pages Processed: <span id="statPages">0</span>
       </li>
     </ul>
