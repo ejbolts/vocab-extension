@@ -117,28 +117,91 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 // Fetch synonyms (Datamuse) and definition (Dictionary API), then cache
+// Fetch synonyms (Datamuse) + definitions, examples, audio, and POS (Free Dictionary API), then cache
 async function fetchDataAndCache(word: string) {
   try {
     const [synResponse, defResponse] = await Promise.all([
-      fetch(`https://api.datamuse.com/words?rel_syn=${word}`),
-      fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`),
+      fetch(
+        `https://api.datamuse.com/words?rel_syn=${encodeURIComponent(word)}`
+      ),
+      fetch(
+        `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(
+          word
+        )}`
+      ),
     ]);
 
-    const synonyms = await synResponse.json();
-    const definitions = await defResponse.json();
+    const datamuseSyns: Array<{ word: string }> = await synResponse.json();
+    const dictData = await defResponse.json();
 
-    const entry = Array.isArray(definitions) ? definitions[0] : undefined;
-    const definition =
-      entry?.meanings?.[0]?.definitions?.[0]?.definition ||
-      "No definition found";
-    const partOfSpeech = entry?.meanings?.[0]?.partOfSpeech || "";
+    if (!Array.isArray(dictData) || !dictData[0]?.meanings) {
+      console.warn(`No dictionary data found for "${word}"`);
+      await chrome.storage.local.set({
+        [word]: {
+          synonyms: datamuseSyns,
+          definition: "No definition found",
+          partOfSpeech: "",
+          audioUrl: "",
+          senses: {},
+        },
+      });
+      return;
+    }
+
+    const entry = dictData[0];
     const audioUrl =
-      (entry?.phonetics || []).find((p: any) => p && p.audio)?.audio || "";
+      (entry.phonetics || []).find((p: any) => p && p.audio)?.audio || "";
+
+    // Build senses grouped by part of speech
+    const senses: Record<
+      string,
+      { definitions: string[]; examples: string[]; synonyms: string[] }
+    > = {};
+
+    entry.meanings.forEach((meaning: any) => {
+      const pos = meaning.partOfSpeech || "unknown";
+      if (!senses[pos]) {
+        senses[pos] = { definitions: [], examples: [], synonyms: [] };
+      }
+      meaning.definitions.forEach((defObj: any) => {
+        if (defObj.definition) senses[pos].definitions.push(defObj.definition);
+        if (defObj.example) senses[pos].examples.push(defObj.example);
+        if (Array.isArray(defObj.synonyms)) {
+          defObj.synonyms.forEach((syn: string) => {
+            if (!senses[pos].synonyms.includes(syn)) {
+              senses[pos].synonyms.push(syn);
+            }
+          });
+        }
+      });
+    });
+
+    // Merge Datamuse synonyms into each POS group (loose match)
+    // For now, just dump them into a "general" bucket or into all POS groups
+    Object.keys(senses).forEach((pos) => {
+      datamuseSyns.forEach((dm) => {
+        if (!senses[pos].synonyms.includes(dm.word)) {
+          senses[pos].synonyms.push(dm.word);
+        }
+      });
+    });
+
+    // Pick a default definition (first POS, first definition)
+    const firstPos = Object.keys(senses)[0];
+    const defaultDefinition =
+      senses[firstPos]?.definitions[0] || "No definition found";
 
     await chrome.storage.local.set({
-      [word]: { synonyms, definition, partOfSpeech, audioUrl },
+      [word]: {
+        synonyms: datamuseSyns, // raw Datamuse list
+        definition: defaultDefinition,
+        partOfSpeech: firstPos,
+        audioUrl,
+        senses, // grouped by POS with definitions, examples, synonyms
+      },
     });
-    console.log(`Cached data for ${word}`);
+
+    console.log(`Cached merged data for ${word}`, { senses });
   } catch (error) {
     console.error(`Error fetching data for ${word}:`, error);
   }

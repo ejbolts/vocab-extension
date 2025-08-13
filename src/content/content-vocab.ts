@@ -25,20 +25,29 @@ export function replaceVocab(
     (window as any).vocabMutationObserver.disconnect();
   }
 
-  const regex = new RegExp(
-    `\\b(${Object.keys(replacementMap).join("|")})\\b`,
-    "gi"
-  );
+  // Escape keys for safe regex building
+  const escapedKeys = Object.keys(replacementMap)
+    .filter((k) => k && k.length > 0)
+    .map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (escapedKeys.length === 0) return;
+  const regex = new RegExp(`\\b(${escapedKeys.join("|")})\\b`, "gi");
   function walk(node: Node) {
     // Skip if node is inside the tooltip
     if (
       node.nodeType === 1 &&
       (node as Element).closest &&
-      (node as Element).closest("#vocab-tooltip")
+      ((node as Element).closest("#vocab-tooltip") ||
+        (node as Element).closest(".vocab-replace"))
     ) {
       return; // Don't process tooltip content
     }
     if (node.nodeType === 3) {
+      // Skip text nodes inside our own replacement spans to prevent cascading
+      const parentEl =
+        node.parentElement || (node.parentNode as Element | null);
+      if (parentEl && parentEl.closest && parentEl.closest(".vocab-replace")) {
+        return;
+      }
       const originalText = node.nodeValue;
       let hasReplacements = false;
       const fragment = document.createDocumentFragment();
