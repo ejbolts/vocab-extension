@@ -127,11 +127,17 @@ async function fetchDataAndCache(word: string) {
     const synonyms = await synResponse.json();
     const definitions = await defResponse.json();
 
+    const entry = Array.isArray(definitions) ? definitions[0] : undefined;
     const definition =
-      definitions[0]?.meanings[0]?.definitions[0]?.definition ||
+      entry?.meanings?.[0]?.definitions?.[0]?.definition ||
       "No definition found";
+    const partOfSpeech = entry?.meanings?.[0]?.partOfSpeech || "";
+    const audioUrl =
+      (entry?.phonetics || []).find((p: any) => p && p.audio)?.audio || "";
 
-    await chrome.storage.local.set({ [word]: { synonyms, definition } });
+    await chrome.storage.local.set({
+      [word]: { synonyms, definition, partOfSpeech, audioUrl },
+    });
     console.log(`Cached data for ${word}`);
   } catch (error) {
     console.error(`Error fetching data for ${word}:`, error);
@@ -140,7 +146,15 @@ async function fetchDataAndCache(word: string) {
 
 // Build replacement map from cached data (now includes definition)
 async function buildReplacementMap(pageWords: string[]) {
-  const replacementMap = {};
+  const replacementMap = {} as Record<
+    string,
+    {
+      vocabWord: string;
+      definition: string;
+      partOfSpeech?: string;
+      audioUrl?: string;
+    }
+  >;
   const { vocabWords = [] } = await chrome.storage.sync.get("vocabWords");
   const { vocabMode = "replace" } = await chrome.storage.sync.get("vocabMode");
   const cache = await chrome.storage.local.get(vocabWords);
@@ -152,14 +166,11 @@ async function buildReplacementMap(pageWords: string[]) {
     if (cachedData && cachedData.synonyms) {
       cachedData.synonyms.forEach((syn: { word: string }) => {
         if (pageWordSet.has(syn.word)) {
-          (
-            replacementMap as Record<
-              string,
-              { vocabWord: string; definition: string }
-            >
-          )[syn.word] = {
+          replacementMap[syn.word] = {
             vocabWord,
             definition: cachedData.definition || "No definition available",
+            partOfSpeech: cachedData.partOfSpeech || "",
+            audioUrl: cachedData.audioUrl || "",
           };
         }
       });

@@ -6,6 +6,8 @@ export function showSynonyms(
   _li: HTMLLIElement,
   selectedWordElem: HTMLElement,
   wordDefinition: HTMLElement,
+  wordPos: HTMLElement,
+  playAudioBtn: HTMLButtonElement,
   synonymsList: HTMLUListElement,
   synonymsSection: HTMLElement
 ): void {
@@ -16,6 +18,19 @@ export function showSynonyms(
     if (cachedData) {
       wordDefinition.textContent =
         cachedData.definition || "No definition available.";
+      wordPos.textContent = cachedData.partOfSpeech || "";
+      if (cachedData.audioUrl) {
+        playAudioBtn.style.display = "inline-block";
+        playAudioBtn.onclick = () => {
+          try {
+            const audio = new Audio(cachedData.audioUrl);
+            audio.play().catch(() => {});
+          } catch {}
+        };
+      } else {
+        playAudioBtn.style.display = "none";
+        playAudioBtn.onclick = null as any;
+      }
       synonymsList.innerHTML = "";
       if (cachedData.synonyms && cachedData.synonyms.length > 0) {
         cachedData.synonyms.forEach((syn: { word: string }) => {
@@ -31,6 +46,9 @@ export function showSynonyms(
     } else {
       wordDefinition.textContent =
         "No data found. Try re-adding the word to refresh cache.";
+      wordPos.textContent = "";
+      playAudioBtn.style.display = "none";
+      playAudioBtn.onclick = null as any;
       synonymsList.innerHTML = "";
     }
 

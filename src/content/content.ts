@@ -56,6 +56,13 @@ function showTooltipAdapter(event: MouseEvent, span: HTMLSpanElement) {
   tooltipState.definition = span.dataset.definition || "";
   tooltipState.currentVocab =
     span.dataset.replacedWith || span.dataset.vocabMatch || "";
+  // Enrich tooltip state with POS and audio if present
+  if (span.dataset.partOfSpeech) {
+    (tooltipState as any).partOfSpeech = span.dataset.partOfSpeech;
+  }
+  if (span.dataset.audioUrl) {
+    (tooltipState as any).audioUrl = span.dataset.audioUrl;
+  }
   showTooltipDom(event, tooltipState);
   bindTooltipControls(span);
 }
@@ -201,6 +208,23 @@ function bindTooltipControls(span: HTMLSpanElement) {
       // Update current span mode to keep tooltip state in sync until reprocess completes
       span.dataset.mode = nextMode;
       reprocessWithMode(nextMode, /* keepTooltip */ true);
+    };
+  }
+
+  const playBtn = tooltipEl.querySelector(
+    "#playAudio"
+  ) as HTMLButtonElement | null;
+  if (playBtn) {
+    playBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const url = (tooltipState as any).audioUrl || span.dataset.audioUrl;
+      if (url) {
+        try {
+          const audio = new Audio(url);
+          audio.play().catch(() => {});
+        } catch {}
+      }
     };
   }
 }

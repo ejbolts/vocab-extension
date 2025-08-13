@@ -55,6 +55,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const wordDefinition = document.getElementById(
     "wordDefinition"
   ) as HTMLParagraphElement;
+  const wordPos = document.getElementById("wordPos") as HTMLSpanElement;
+  const playAudioBtn = document.getElementById(
+    "playWordAudio"
+  ) as HTMLButtonElement;
   const synonymsList = document.getElementById(
     "synonymsList"
   ) as HTMLUListElement;
@@ -172,6 +176,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     li,
                     selectedWordElem,
                     wordDefinition,
+                    wordPos,
+                    playAudioBtn,
                     synonymsList,
                     synonymsSection
                   );

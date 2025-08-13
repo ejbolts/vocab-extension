@@ -18,6 +18,8 @@ export function showTooltip(
     original: string;
     definition: string;
     currentVocab: string;
+    partOfSpeech?: string;
+    audioUrl?: string;
   }
 ): void {
   // Remove any pending hide
@@ -49,6 +51,12 @@ export function showTooltip(
       <button id="closeTooltip" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 16px;">×</button>
     </div>
     <p><strong>Definition:</strong> ${options.definition}</p>
+    ${options.partOfSpeech ? `<p>${options.partOfSpeech}</p>` : ""}
+    ${
+      options.audioUrl
+        ? `<button id="playAudio" style="display:block;margin:5px 0; padding:4px; background:#555; border:none; color:#fff; cursor:pointer;">Play Audio</button>`
+        : ""
+    }
     <button id="toggleOriginal" style="display: ${
       options.currentMode === "replace" ? "block" : "none"
     }; margin: 5px 0; padding: 4px; background: #555; border: none; color: #fff; cursor: pointer;">Show Original</button>

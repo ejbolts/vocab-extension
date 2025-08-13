@@ -2,7 +2,15 @@
 
 // Function to replace/highlight words based on map and mode
 export function replaceVocab(
-  replacementMap: Record<string, { vocabWord: string; definition: string }>,
+  replacementMap: Record<
+    string,
+    {
+      vocabWord: string;
+      definition: string;
+      partOfSpeech?: string;
+      audioUrl?: string;
+    }
+  >,
   mode: string,
   ignoredWords: Set<string> = new Set(),
   rootNode: Node = document.body,
@@ -62,12 +70,15 @@ export function replaceVocab(
 
           // Create the replacement span
           const lowerMatch = captured.toLowerCase();
-          const { vocabWord, definition } = replacementMap[lowerMatch];
+          const { vocabWord, definition, partOfSpeech, audioUrl } =
+            replacementMap[lowerMatch];
           const span = document.createElement("span");
           span.className = "vocab-replace";
           span.dataset.original = fullMatch;
           span.dataset.definition = definition || "No definition available";
           span.dataset.mode = mode;
+          if (partOfSpeech) span.dataset.partOfSpeech = partOfSpeech;
+          if (audioUrl) span.dataset.audioUrl = audioUrl;
 
           if (matchedWordsGlobal) matchedWordsGlobal.add(lowerMatch);
 
